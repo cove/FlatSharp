@@ -24,8 +24,9 @@ using System.Diagnostics;
 
 namespace BenchmarkCore
 {
-    [DisassemblyDiagnoser(maxDepth: 30, printSource: true, exportHtml: true, printInstructionAddresses: true)]
-    [ShortRunJob(BenchmarkDotNet.Jobs.RuntimeMoniker.NetCoreApp50, BenchmarkDotNet.Environments.Jit.RyuJit, BenchmarkDotNet.Environments.Platform.AnyCpu)]
+    [MemoryDiagnoser]
+    [ThreadingDiagnoser]
+    [MediumRunJob(BenchmarkDotNet.Jobs.RuntimeMoniker.NetCoreApp50, BenchmarkDotNet.Environments.Jit.RyuJit, BenchmarkDotNet.Environments.Platform.AnyCpu)]
     public class StructVectorClone
     {
         private readonly byte[] data = new byte[10 * 1024 * 1024];
@@ -73,14 +74,7 @@ namespace BenchmarkCore
                 sum += (int)(item.X + item.Y + item.Z);
             }
 
-            for (int i = 0; i < count; ++i)
-            {
-                ((IFlatBufferDeserializedObject)points[i]).Release();
-            }
-
             return sum;
-
-            //((IFlatBufferDeserializedObject)t).Release();
         }
     }
 
@@ -92,43 +86,32 @@ namespace BenchmarkCore
             //m.Setup();
 
             //BenchmarkRunner.Run<MeshServerUseCases>();
+            BenchmarkRunner.Run<MeshServerUseCases>();
             BenchmarkRunner.Run<Modified.MeshServerModifiedUseCases>();
 
             //BenchmarkRunner.Run<StructVectorClone>();
             //FlatSharpGlobalSettings.CollectPooledObjectStackTraces = true;
 
-            //var table = new SomeTable
-            //{
-            //    Struct = new Struct
-            //    {
-            //        Int = 23,
-            //        Other = new OtherStruct
-            //        {
-            //            Long = 45,
-            //        },
-            //    }
-            //};
-
             //byte[] buffer = new byte[1024];
             //SomeTable.Serializer.Write(buffer, table);
 
             //var parsed = SomeTable.Serializer.Parse(buffer);
-            //(parsed as IFlatBufferDeserializedObject)?.Release();
+            //var parsed2 = parsed;
 
-            //Console.WriteLine(parsed.Struct.Int);
-            //Console.WriteLine(parsed.Struct.Other.Long);
-            //parsed.Struct.Int--;
-            //parsed.Struct.Other = new OtherStruct { Long = 10 };
+            //for (int i = 0; i < parsed2.Points.Count; ++i)
+            //{
+            //    Console.WriteLine(parsed2.Points[i].X);
+            //}
 
-            //var parsed2 = SomeTable.Serializer.Parse(buffer);
-            //Console.WriteLine(parsed2.Struct.Int);
-            //Console.WriteLine(parsed2.Struct.Other.Long);
+            //SomeTable.Serializer.Recycle(ref parsed);
 
-            //parsed2.Struct.Other = null!;
+            //parsed = SomeTable.Serializer.Parse(buffer);
+            //parsed2 = parsed;
 
-            //var parsed3 = SomeTable.Serializer.Parse(buffer);
-            //Console.WriteLine(parsed3.Struct.Int);
-            //Console.WriteLine(parsed3.Struct.Other.Long);
+            //for (int i = 0; i < parsed2.Points.Count; ++i)
+            //{
+            //    Console.WriteLine(parsed2.Points[i].X);
+            //}
         }
     }
 }

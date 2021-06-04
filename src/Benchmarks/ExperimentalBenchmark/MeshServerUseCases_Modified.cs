@@ -8,6 +8,8 @@ using FlatSharp;
 
 namespace BenchmarkCore.Modified
 {
+    [MemoryDiagnoser]
+    [ThreadingDiagnoser]
     [ShortRunJob(BenchmarkDotNet.Jobs.RuntimeMoniker.NetCoreApp50, BenchmarkDotNet.Environments.Jit.RyuJit, BenchmarkDotNet.Environments.Platform.AnyCpu)]
     public class MeshServerModifiedUseCases
     {
@@ -26,12 +28,15 @@ namespace BenchmarkCore.Modified
         private int regionSizeSquared;
         private Random rnd;
 
-        private FlatBufferSerializer serializer;
+        private ISerializer<VoxelRegion3D> voxelSerializer;
+        private ISerializer<Mesh> meshSerializer;
 
         [GlobalSetup]
         public void Setup()
         {
-            this.serializer = new FlatBufferSerializer(FlatBufferDeserializationOption.VectorCacheMutable);
+            // var serializer = new FlatBufferSerializer(FlatBufferDeserializationOption.VectorCacheMutable);
+            this.meshSerializer = Mesh.Serializer;
+            this.voxelSerializer = VoxelRegion3D.Serializer;
 
             regionSizeCubed = RegionSize * RegionSize * RegionSize;
             regionSizeSquared = RegionSize * RegionSize;
@@ -152,9 +157,9 @@ namespace BenchmarkCore.Modified
             }
             else
             {
-                var maxSize = this.serializer.GetMaxSize(region);
+                var maxSize = this.voxelSerializer.GetMaxSize(region);
                 var networkBuffer = new byte[maxSize];
-                this.serializer.Serialize(region, networkBuffer);
+                this.voxelSerializer.Write(networkBuffer, region);
             }
         }
 
@@ -166,9 +171,9 @@ namespace BenchmarkCore.Modified
             }
             else
             {
-                var maxSize = this.serializer.GetMaxSize(region);
+                var maxSize = this.meshSerializer.GetMaxSize(region);
                 var networkBuffer = new byte[maxSize];
-                this.serializer.Serialize(region, networkBuffer);
+                this.meshSerializer.Write(networkBuffer, region);
             }
         }
 
@@ -183,8 +188,9 @@ namespace BenchmarkCore.Modified
         public void SendRegionToClient()
         {
             var regionFromStorage = FakeDiskStoredRegion;
-            var deserializedRegion = this.serializer.Parse<VoxelRegion3D>(regionFromStorage);
+            var deserializedRegion = this.voxelSerializer.Parse(regionFromStorage);
             FakeGrpcStreamRegionToClient(deserializedRegion);
+            this.voxelSerializer.Recycle(ref deserializedRegion);
         }
 
         [Benchmark]
@@ -196,8 +202,9 @@ namespace BenchmarkCore.Modified
                 for (int z = 0; z < 20; z++)
                 {
                     var regionFromStorage = FakeDiskStoredRegion;
-                    var deserializedRegion = this.serializer.Parse<VoxelRegion3D>(regionFromStorage);
+                    var deserializedRegion = this.voxelSerializer.Parse(regionFromStorage);
                     FakeGrpcStreamRegionToClient(deserializedRegion);
+                    this.voxelSerializer.Recycle(ref deserializedRegion);
                 }
             }
         }
@@ -211,8 +218,9 @@ namespace BenchmarkCore.Modified
                 for (int z = 0; z < 20; z++)
                 {
                     var regionFromStorage = FakeDiskStoredRegion;
-                    var deserializedRegion = this.serializer.Parse<VoxelRegion3D>(regionFromStorage);
+                    var deserializedRegion = this.voxelSerializer.Parse(regionFromStorage);
                     FakeGrpcStreamRegionToClient(deserializedRegion);
+                    this.voxelSerializer.Recycle(ref deserializedRegion);
                 }
             }
         }
@@ -221,17 +229,18 @@ namespace BenchmarkCore.Modified
         public void SendMeshToClient()
         {
             var meshFromStorage = FakeDiskStoredMesh;
-            var deserializedMesh = this.serializer.Parse<Mesh>(meshFromStorage);
+            var deserializedMesh = this.meshSerializer.Parse<Mesh>(meshFromStorage);
             FakeGrpcStreamMeshToClient(deserializedMesh);
+            this.meshSerializer.Recycle(ref deserializedMesh);
         }
 
         [Benchmark]
         public void ModifyMeshAndSendToClients()
         {
             var regionFromStorage = FakeDiskStoredRegion;
-            var deserializedRegion = this.serializer.Parse<VoxelRegion3D>(regionFromStorage);
+            var deserializedRegion = this.voxelSerializer.Parse(regionFromStorage);
 
-            Mesh mesh = this.serializer.Parse<Mesh>(FakeDiskStoredMesh);
+            Mesh mesh = this.meshSerializer.Parse<Mesh>(FakeDiskStoredMesh);
 
             // simulate region data change
             deserializedRegion.voxels[rnd.Next(0, deserializedRegion.voxels.Count - 1)].VoxelType = (byte)rnd.Next(1);
@@ -250,20 +259,23 @@ namespace BenchmarkCore.Modified
                 // Not really needed. We can just memcpy the modified buffer.
                 FakeGrpcStreamMeshToClient(mesh); 
             }
+
+            this.meshSerializer.Recycle(ref mesh);
+            this.voxelSerializer.Recycle(ref deserializedRegion);
         }
 
         private void SaveToDisk(VoxelRegion3D deserializedRegion)
         {
-            FakeDiskStoredRegion = new byte[this.serializer.GetMaxSize(deserializedRegion)];
-            int bytesWritten = this.serializer.Serialize(deserializedRegion, FakeDiskStoredRegion);
+            FakeDiskStoredRegion = new byte[this.voxelSerializer.GetMaxSize(deserializedRegion)];
+            int bytesWritten = this.voxelSerializer.Write(FakeDiskStoredRegion, deserializedRegion);
 
             FakeDiskStoredRegion = FakeDiskStoredRegion.AsSpan().Slice(0, bytesWritten).ToArray();
         }
 
         private void SaveToDisk(Mesh mesh)
         {
-            FakeDiskStoredMesh = new byte[this.serializer.GetMaxSize(mesh)];
-            int bytesWritten = this.serializer.Serialize(mesh, FakeDiskStoredMesh);
+            FakeDiskStoredMesh = new byte[this.meshSerializer.GetMaxSize(mesh)];
+            int bytesWritten = this.meshSerializer.Write(FakeDiskStoredMesh, mesh);
 
             FakeDiskStoredMesh = FakeDiskStoredMesh.AsSpan().Slice(0, bytesWritten).ToArray();
         }

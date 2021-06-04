@@ -1,7 +1,7 @@
 ﻿
 namespace BenchmarkCore.Modified;
 
-struct Vector4 (fs_writeThrough)
+struct Vector4 (fs_writeThrough, fs_pool)
 {
     x:float;
     y:float;
@@ -9,33 +9,33 @@ struct Vector4 (fs_writeThrough)
     w:float;
 }
 
-struct Vector3Int (fs_writeThrough)
+struct Vector3Int (fs_writeThrough, fs_pool)
 {
     x:int32;
     y:int32;
     z:int32;
 }
 
-struct Vector3  (fs_writeThrough)
+struct Vector3  (fs_writeThrough, fs_pool)
 {
     x:float;
     y:float;
     z:float;
 }
 
-struct Vector2Int (fs_writeThrough)
+struct Vector2Int (fs_writeThrough, fs_pool)
 {
     x:int32;
     y:int32;
 }
 
-struct Vector2 (fs_writeThrough)
+struct Vector2 (fs_writeThrough, fs_pool)
 {
     x:float;
     y:float;
 }
 
-struct Color (fs_writeThrough)
+struct Color (fs_writeThrough, fs_pool)
 {
     r: ubyte;
     g: ubyte;
@@ -43,7 +43,7 @@ struct Color (fs_writeThrough)
     a: ubyte;
 }
 
-struct Voxel (fs_writeThrough)
+struct Voxel (fs_writeThrough, fs_pool)
 {
     VoxelType: ubyte;
     SubType : ubyte;
@@ -51,12 +51,12 @@ struct Voxel (fs_writeThrough)
     Unused:ubyte;
 }
 
-struct MutableUInt32 (fs_writeThrough)
+struct MutableUInt32 (fs_writeThrough, fs_pool)
 {
     Value : uint32;
 }
 
-struct MutableUShort (fs_writeThrough)
+struct MutableUShort (fs_writeThrough, fs_pool)
 {
     Value : ushort;
 }
@@ -71,7 +71,7 @@ table Mesh (fs_serializer:VectorCacheMutable)
     filledLength: MutableUInt32;
 }
 
-table VoxelRegion3D
+table VoxelRegion3D (fs_serializer:VectorCacheMutable)
 {
     location: Vector3Int;
     iteration: MutableUInt32;

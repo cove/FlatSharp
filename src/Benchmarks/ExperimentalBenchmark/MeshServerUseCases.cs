@@ -8,6 +8,8 @@ using FlatSharp;
 
 namespace BenchmarkCore
 {
+    [MemoryDiagnoser]
+    [ThreadingDiagnoser]
     [ShortRunJob(BenchmarkDotNet.Jobs.RuntimeMoniker.NetCoreApp50, BenchmarkDotNet.Environments.Jit.RyuJit, BenchmarkDotNet.Environments.Platform.AnyCpu)]
     public class MeshServerUseCases
     {
