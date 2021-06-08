@@ -32,6 +32,9 @@ namespace BenchmarkCore
 
         private FlatBufferSerializer serializer;
 
+        // we aren't trying to benchmark the allocator and GC here. Assume an already-allocated buffer.
+        private byte[] networkBuffer = new byte[100 * 1024 * 1024];
+
         [GlobalSetup]
         public void Setup()
         {
@@ -124,14 +127,10 @@ namespace BenchmarkCore
 
         private void FakeGrpcStreamRegionToClient(VoxelRegion3D region)
         {
-            var maxSize = this.serializer.GetMaxSize(region);
-            var networkBuffer = new byte[maxSize];
             this.serializer.Serialize(region, networkBuffer);
         }
         private void FakeGrpcStreamMeshToClient(Mesh region)
         {
-            var maxSize = this.serializer.GetMaxSize(region);
-            var networkBuffer = new byte[maxSize];
             this.serializer.Serialize(region, networkBuffer);
         }
 

@@ -37,7 +37,6 @@ namespace BenchmarkCore.Modified
         [GlobalSetup]
         public void Setup()
         {
-            // var serializer = new FlatBufferSerializer(FlatBufferDeserializationOption.VectorCacheMutable);
             this.meshSerializer = Mesh.Serializer;
             this.voxelSerializer = VoxelRegion3D.Serializer;
 
@@ -48,7 +47,7 @@ namespace BenchmarkCore.Modified
 
             var region = new VoxelRegion3D();
             region.size = RegionSize;
-            region.voxels = new List<Voxel>();
+            region.voxels = new List<Voxel>(regionSizeCubed);
             region.iteration = new MutableUInt32 { Value = 0 };
             region.location = new Vector3Int();
             rnd = new Random(0);
@@ -65,7 +64,7 @@ namespace BenchmarkCore.Modified
 
             SaveToDisk(region);
 
-            // Update fillSize to accomodate max of (fillSize * 3). Some items may be null.
+            // Update fillSize to accomodate max. Some items may be null.
             Mesh mesh = new Mesh
             {
                 color = new List<Color>(),
@@ -101,10 +100,8 @@ namespace BenchmarkCore.Modified
             var voxels = voxelRegion3D.voxels;
 
             Voxel[] adjacentVoxels = new Voxel[8];
-
             for (int i = 0; i < regionSizeCubed - (regionSizeSquared + RegionSize + 1); i++)
             {
-
                 adjacentVoxels[0] = voxels[i];
                 adjacentVoxels[1] = voxels[i + 1];
                 adjacentVoxels[2] = voxels[i + RegionSize];
@@ -150,8 +147,6 @@ namespace BenchmarkCore.Modified
                 }
             }
 
-            mesh.filledLength.Value = (uint)filled;
-
             return mesh;
         }
 
@@ -176,8 +171,8 @@ namespace BenchmarkCore.Modified
             }
             else
             {
-                var maxSize = this.meshSerializer.GetMaxSize(region);
-                this.meshSerializer.Write(networkBuffer, region);
+                var maxSize = this.voxelSerializer.GetMaxSize(region);
+                this.voxelSerializer.Write(networkBuffer, region);
             }
         }
 
@@ -257,12 +252,8 @@ namespace BenchmarkCore.Modified
             for (int i = 0; i < ClientsInChangeRadius; i++)
             {
                 // Not really needed. We can just memcpy the modified buffer.
-                //FakeGrpcStreamMeshToClient(mesh);
-                //FakeDiskStoredMesh.CopyTo(networkBuffer, 0);
+                FakeGrpcStreamMeshToClient(mesh);
             }
-
-            //this.meshSerializer.Recycle(ref mesh);
-            //this.voxelSerializer.Recycle(ref deserializedRegion);
         }
 
         private void SaveToDisk(VoxelRegion3D deserializedRegion)
