@@ -1,7 +1,7 @@
 ﻿
 namespace BenchmarkCore.Modified;
 
-struct Vector4 (fs_writeThrough, xxfs_recyclePoolSize:-1)
+struct Vector4 (fs_writeThrough)
 {
     x:float;
     y:float;
@@ -9,33 +9,33 @@ struct Vector4 (fs_writeThrough, xxfs_recyclePoolSize:-1)
     w:float;
 }
 
-struct Vector3Int (fs_writeThrough, xxfs_recyclePoolSize:-1)
+struct Vector3Int (fs_writeThrough)
 {
     x:int32;
     y:int32;
     z:int32;
 }
 
-struct Vector3  (fs_writeThrough, xxfs_recyclePoolSize:-1)
+struct Vector3  (fs_writeThrough)
 {
     x:float;
     y:float;
     z:float;
 }
 
-struct Vector2Int (fs_writeThrough, xxfs_recyclePoolSize:-1)
+struct Vector2Int (fs_writeThrough)
 {
     x:int32;
     y:int32;
 }
 
-struct Vector2 (fs_writeThrough, xxfs_recyclePoolSize:-1)
+struct Vector2 (fs_writeThrough)
 {
     x:float;
     y:float;
 }
 
-struct Color (fs_writeThrough, xxfs_recyclePoolSize:-1)
+struct Color (fs_writeThrough)
 {
     r: ubyte;
     g: ubyte;
@@ -43,7 +43,7 @@ struct Color (fs_writeThrough, xxfs_recyclePoolSize:-1)
     a: ubyte;
 }
 
-struct Voxel (fs_writeThrough, xxfs_recyclePoolSize:-1)
+struct Voxel (fs_writeThrough)
 {
     VoxelType: ubyte;
     SubType : ubyte;
@@ -51,23 +51,23 @@ struct Voxel (fs_writeThrough, xxfs_recyclePoolSize:-1)
     Unused:ubyte;
 }
 
-struct MutableUInt32 (fs_writeThrough, xxfs_recyclePoolSize:-1)
+struct MutableUInt32 (fs_writeThrough)
 {
     Value : uint32;
 }
 
-struct MutableUShort (fs_writeThrough, xxfs_recyclePoolSize:-1)
+struct MutableUShort (fs_writeThrough)
 {
     Value : ushort;
 }
 
 table Mesh (fs_serializer:LazyWriteThrough)
 {
-    vertices:   [Vector3] (fs_vector:IList);
-    normals:    [Vector3] (fs_vector:IList);
-    uv:         [Vector2] (fs_vector:IList);
-    color:      [Color] (fs_vector:IList);
-    triangles:  [MutableUShort] (fs_vector:IList);
+    vertices:   [Vector3];
+    normals:    [Vector3];
+    uv:         [Vector2];
+    color:      [Color];
+    triangles:  [MutableUShort];
     filledLength: MutableUInt32;
 }
 
@@ -76,5 +76,5 @@ table VoxelRegion3D (fs_serializer:LazyWriteThrough)
     location: Vector3Int;
     iteration: MutableUInt32;
     size: ushort;
-    voxels: [Voxel] (fs_vector:IList);
+    voxels: [Voxel];
 } 
