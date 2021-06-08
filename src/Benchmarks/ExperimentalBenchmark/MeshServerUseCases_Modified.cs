@@ -193,7 +193,6 @@ namespace BenchmarkCore.Modified
             var regionFromStorage = FakeDiskStoredRegion;
             var deserializedRegion = this.voxelSerializer.Parse(regionFromStorage);
             FakeGrpcStreamRegionToClient(deserializedRegion);
-            this.voxelSerializer.Recycle(ref deserializedRegion);
         }
 
         [Benchmark]
@@ -207,7 +206,6 @@ namespace BenchmarkCore.Modified
                     var regionFromStorage = FakeDiskStoredRegion;
                     var deserializedRegion = this.voxelSerializer.Parse(regionFromStorage);
                     FakeGrpcStreamRegionToClient(deserializedRegion);
-                    this.voxelSerializer.Recycle(ref deserializedRegion);
                 }
             }
         }
@@ -223,7 +221,6 @@ namespace BenchmarkCore.Modified
                     var regionFromStorage = FakeDiskStoredRegion;
                     var deserializedRegion = this.voxelSerializer.Parse(regionFromStorage);
                     FakeGrpcStreamRegionToClient(deserializedRegion);
-                    this.voxelSerializer.Recycle(ref deserializedRegion);
                 }
             }
         }
@@ -234,7 +231,6 @@ namespace BenchmarkCore.Modified
             var meshFromStorage = FakeDiskStoredMesh;
             var deserializedMesh = this.meshSerializer.Parse<Mesh>(meshFromStorage);
             FakeGrpcStreamMeshToClient(deserializedMesh);
-            this.meshSerializer.Recycle(ref deserializedMesh);
         }
 
         [Benchmark]
