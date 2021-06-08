@@ -46,7 +46,7 @@ namespace FlatSharp.TypeModel
         private readonly HashSet<int> occupiedVtableSlots = new HashSet<int>();
         private ConstructorInfo? preferredConstructor;
         private MethodInfo? onDeserializeMethod;
-        private FlatBufferTableAttribute? attribute;
+        private FlatBufferTableAttribute attribute = null!;
         private readonly string tableReaderClassName = "tableReader_" + Guid.NewGuid().ToString("n");
 
         internal TableTypeModel(Type clrType, TypeModelContainer typeModelProvider) : base(clrType, typeModelProvider)
@@ -99,11 +99,6 @@ namespace FlatSharp.TypeModel
         public override bool SerializesInline => false;
 
         /// <summary>
-        /// Indicates if we support recycle or not.
-        /// </summary>
-        public override bool SupportsRecycle => this.attribute.PoolSize != 0 || this.memberTypes.Values.Any(x => x.ItemTypeModel.SupportsRecycle);
-
-        /// <summary>
         /// Gets the maximum used index in this vtable.
         /// </summary>
         public int MaxIndex => this.occupiedVtableSlots.Any() ? this.occupiedVtableSlots.Max() : -1;
@@ -130,12 +125,19 @@ namespace FlatSharp.TypeModel
 
         public override ConstructorInfo? PreferredSubclassConstructor => this.preferredConstructor;
 
+        public override IEnumerable<ITypeModel> Children => this.memberTypes.Values.Select(x => x.ItemTypeModel);
+
+        /// <summary>
+        /// Use the table attributre to determine rules for recycle.
+        /// </summary>
+        public override bool IsRecyclable => this.attribute.RecyclePoolSize != 0;
+
         public override void Initialize()
         {
-            this.attribute = this.ClrType.GetCustomAttribute<FlatBufferTableAttribute>();
-            if (this.attribute == null)
             {
-                throw new InvalidFlatBufferDefinitionException($"Can't create table type model from type {this.ClrType.Name} because it does not have a [FlatBufferTable] attribute.");
+                FlatBufferTableAttribute? attr = this.ClrType.GetCustomAttribute<FlatBufferTableAttribute>();
+                FlatSharpInternal.Assert(attr != null, "Table object missing attribute");
+                this.attribute = attr;
             }
 
             ValidateFileIdentifier(this.attribute.FileIdentifier);
@@ -169,15 +171,9 @@ namespace FlatSharp.TypeModel
                     property.Property,
                     property.Attribute);
                 
-                if (!model.IsVirtual 
-                    && this.attribute.PoolSize != 0
-                    && model.SetterKind == ItemMemberModel.SetMethodKind.Init)
+                if (this.attribute.RecyclePoolSize != 0)
                 {
-                    // Pooling is not possible with non-virtual init-only setters. Compiler
-                    // correctly complains that we are messing with properties outside
-                    // of a valid context when we recycle them.
-                    throw new InvalidFlatBufferDefinitionException(
-                        $"FlatBuffer table property '{this.GetCompilableTypeName()}.{property.Property.Name}' is non-virtual and init-only in a table with object pooling enabled. This combination is not supported. Consider marking the property as virtual, settable, or disabling pooling.");
+                    model.ValidateRecyclableSetter(this);
                 }
 
                 property.ItemTypeModel.AdjustTableMember(model);
@@ -655,15 +651,20 @@ $@"
             string offsetTuple = string.Empty;
             if (vtableEntries == 1)
             {
-                serializeInvocation = context.With(
-                    valueVariableName: $"{valueVariableName}{nullForgiving}",
-                    offsetVariableName: $"{OffsetVariableName(index, 0)}").GetSerializeInvocation(memberModel.ItemTypeModel.ClrType);
+                serializeInvocation = (context with
+                {
+                    ValueVariableName = $"{valueVariableName}{nullForgiving}",
+                    OffsetVariableName = $"{OffsetVariableName(index, 0)}"
+                }).GetSerializeInvocation(memberModel.ItemTypeModel.ClrType);
             }
             else
             {
-                serializeInvocation = context.With(
-                    valueVariableName: $"{valueVariableName}{nullForgiving}",
-                    offsetVariableName: $"ref offsetTuple").GetSerializeInvocation(memberModel.ItemTypeModel.ClrType);
+                serializeInvocation = (context with
+                {
+                    ValueVariableName = $"{valueVariableName}{nullForgiving}",
+                    OffsetVariableName = $"offsetTuple",
+                    IsOffsetByRef = true,
+                }).GetSerializeInvocation(memberModel.ItemTypeModel.ClrType);
 
                 offsetTuple = $"var offsetTuple = ({string.Join(", ", Enumerable.Range(0, vtableEntries).Select(x => OffsetVariableName(index, x)))});";
             }
@@ -678,7 +679,7 @@ $@"
         {
             // We have to implement two items: The table class and the overall "read" method.
             // Let's start with the read method.
-            var classDef = DeserializeClassDefinition.Create(this.tableReaderClassName, this.onDeserializeMethod, this, context.Options, this.attribute!.PoolSize);
+            var classDef = DeserializeClassDefinition.Create(this.tableReaderClassName, this.onDeserializeMethod, this, context.Options, this.attribute.RecyclePoolSize);
 
             // Build up a list of property overrides.
             foreach (var item in this.IndexToMemberMap.Where(x => !x.Value.IsDeprecated))
@@ -754,7 +755,7 @@ $@"
 $@"
             if ({context.ValueVariableName} is {nameof(IFlatBufferDeserializedObject)} deserializedObj)
             {{
-                deserializedObj.{nameof(IFlatBufferDeserializedObject.DangerousRelease)}();
+                deserializedObj.{nameof(IFlatBufferDeserializedObject.DangerousRecycle)}();
             }}
 ";
             return new CodeGeneratedMethod(body);
@@ -764,18 +765,6 @@ $@"
         {
             tableMember = this.KeyMember;
             return tableMember != null;
-        }
-
-        public override void TraverseObjectGraph(HashSet<Type> seenTypes)
-        {
-            seenTypes.Add(this.ClrType);
-            foreach (var member in this.memberTypes.Values)
-            {
-                if (seenTypes.Add(member.ItemTypeModel.ClrType))
-                {
-                    member.ItemTypeModel.TraverseObjectGraph(seenTypes);
-                }
-            }
         }
 
         private int GetVTableLength(int index) => 4 + (2 * (index + 1));

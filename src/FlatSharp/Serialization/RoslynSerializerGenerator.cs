@@ -20,6 +20,7 @@ namespace FlatSharp
     using System.Buffers;
     using System.Collections.Generic;
     using System.Collections.ObjectModel;
+    using System.Diagnostics.CodeAnalysis;
     using System.IO;
     using System.Linq;
     using System.Reflection;
@@ -59,36 +60,40 @@ namespace FlatSharp
 
         static RoslynSerializerGenerator()
         {
-            commonReferences = new List<MetadataReference>();
-
-            foreach (string name in new[] { "netstandard", "System.Collections", "System.Runtime" })
+            [ExcludeFromCodeCoverage]
+            static Assembly TryLoadFromFile(string assemblyName)
             {
-                Assembly assembly;
                 try
                 {
-                    assembly = Assembly.Load(name);
+                    return Assembly.Load(assemblyName);
                 }
                 catch (FileNotFoundException)
                 {
                     try
                     {
                         // For .NET 47, NetStandard may not be present in the GAC. Try to expand to see if we can grab it locally.
-                        assembly = Assembly.LoadFile(Path.Combine(typeof(RoslynSerializerGenerator).Assembly.Location, $"{name}.dll"));
+                        return Assembly.LoadFile(Path.Combine(typeof(RoslynSerializerGenerator).Assembly.Location, $"{assemblyName}.dll"));
                     }
                     catch (FileNotFoundException)
                     {
                         // Method of last resort: Load our embedded resource.
                         var embeddedResourceName = typeof(RoslynSerializerGenerator).Assembly.GetManifestResourceNames().Single(
-                            x => x.IndexOf(name, StringComparison.OrdinalIgnoreCase) >= 0);
+                            x => x.IndexOf(assemblyName, StringComparison.OrdinalIgnoreCase) >= 0);
 
                         using var resourceStream = typeof(RoslynSerializerGenerator).Assembly.GetManifestResourceStream(embeddedResourceName);
                         using var memoryStream = new MemoryStream();
 
                         resourceStream!.CopyTo(memoryStream);
-                        assembly = Assembly.Load(memoryStream.ToArray());
+                        return Assembly.Load(memoryStream.ToArray());
                     }
                 }
+            }
 
+            commonReferences = new List<MetadataReference>();
+
+            foreach (string name in new[] { "netstandard", "System.Collections", "System.Runtime" })
+            {
+                Assembly assembly = TryLoadFromFile(name);
                 var reference = MetadataReference.CreateFromFile(assembly.Location);
                 commonReferences.Add(reference);
             }
@@ -120,6 +125,7 @@ $@"
                 using System.Runtime.CompilerServices;
                 using FlatSharp;
                 using FlatSharp.Attributes;
+                using FlatSharp.Internal;
 
                 {code}
             }}";
@@ -133,10 +139,7 @@ $@"
                     externalRefs.ToArray());
 
             Type? type = assembly.GetType($"Generated.{GeneratedSerializerClassName}");
-            if (type is null)
-            {
-                throw new InvalidOperationException("Generated assembly did not contain serializer type.");
-            }
+            FlatSharpInternal.Assert(type is not null, "Generated assembly did not contain serializer type.");
 
             object? item = Activator.CreateInstance(type);
             if (item is IGeneratedSerializer<TRoot> serializer)
@@ -148,7 +151,9 @@ $@"
                     assemblyData);
             }
 
-            throw new InvalidOperationException($"Unexpected FlatSharp Error: Compilation succeeded, but created instance {item}, Type = {assembly.GetTypes()[0]}");
+            FlatSharpInternal.Assert(false, $"Compilation succeeded, but created instance {item}, Type = {assembly.GetTypes()[0]}");
+
+            return null; // won't ever hit.
         }
 
         internal string GenerateCSharp<TRoot>(string visibility = "public")
@@ -233,6 +238,10 @@ $@"
 #if DEBUG
             string actualCSharp = tree.ToString();
             var debugCSharp = formattedTextFactory();
+
+            rootNode = ApplySyntaxTransformations(CSharpSyntaxTree.ParseText(debugCSharp, ParseOptions).GetRoot());
+            tree = SyntaxFactory.SyntaxTree(rootNode);
+            formattedTextFactory = GetFormattedTextFactory(tree);
 #endif
 
             string name = $"FlatSharpDynamicAssembly_{Guid.NewGuid():n}";
@@ -252,7 +261,15 @@ $@"
             {
                 EmitResult result = compilation.Emit(ms);
 
-                ThrowOnEmitFailure(result, tree, formattedTextFactory);
+                ThrowOnEmitFailure(
+                    result, 
+                    tree,
+#if DEBUG
+                    debugCSharp
+#else
+                    formattedTextFactory
+#endif
+                );
 
                 var metadataRef = compilation.ToMetadataReference();
                 ms.Position = 0;
@@ -326,7 +343,8 @@ $@"
                 MetadataReference.CreateFromFile(typeof(IGeneratedSerializer<byte>).Assembly.Location),
                 MetadataReference.CreateFromFile(typeof(InvalidDataException).Assembly.Location),
                 MetadataReference.CreateFromFile(typeof(ReadOnlyDictionary<,>).Assembly.Location),
-                MetadataReference.CreateFromFile(typeof(System.Collections.Concurrent.ConcurrentBag<>).Assembly.Location),
+                MetadataReference.CreateFromFile(typeof(System.Threading.Channels.Channel<>).Assembly.Location),
+                MetadataReference.CreateFromFile(typeof(ArrayPool<>).Assembly.Location),
             });
 
             return references;
@@ -335,7 +353,12 @@ $@"
         private static void ThrowOnEmitFailure(
             EmitResult result,
             SyntaxTree syntaxTree,
-            Func<string> getFormattedCSharp)
+#if DEBUG
+            string cSharp
+#else
+            Func<string> cSharpFactory
+#endif
+            )
         {
             if (!result.Success || EnableStrictValidation)
             {
@@ -365,7 +388,11 @@ $@"
                         errors.Add($"FlatSharp compilation error: {error}, Context = \"{formatted}\"");
                     }
 
-                    throw new FlatSharpCompilationException(errors.ToArray(), getFormattedCSharp());
+#if !DEBUG
+                    string cSharp = cSharpFactory();
+#endif
+
+                    throw new FlatSharpCompilationException(errors.ToArray(), cSharp);
                 }
             }
         }
@@ -481,15 +508,12 @@ $@"
             foreach (var type in this.writeMethods.Keys)
             {
                 ITypeModel typeModel = this.typeModelContainer.CreateTypeModel(type);
+                bool isOffsetByRef = typeModel.PhysicalLayout.Length > 1;
+
                 var maxSizeContext = new GetMaxSizeCodeGenContext("value", this.maxSizeMethods, this.options);
-                var parseContext = new ParserCodeGenContext("buffer", "offset", "TInputBuffer", this.readMethods, this.writeMethods, this.recycleMethods, this.options);
-                var serializeContext = new SerializationCodeGenContext("context", "span", "spanWriter", "value", "offset", this.writeMethods, this.typeModelContainer, this.options);
-                var recycleContext = new RecycleCodeGenContext
-                {
-                    MethodNameMap = this.recycleMethods,
-                    Options = this.options,
-                    ValueVariableName = "value",
-                };
+                var parseContext = new ParserCodeGenContext("buffer", "offset", "TInputBuffer", isOffsetByRef, this.readMethods, this.writeMethods, this.recycleMethods, this.options);
+                var serializeContext = new SerializationCodeGenContext("context", "span", "spanWriter", "value", "offset", isOffsetByRef, this.writeMethods, this.typeModelContainer, this.options);
+                var recycleContext = new RecycleCodeGenContext("value", this.recycleMethods, this.options);
 
                 var maxSizeMethod = typeModel.CreateGetMaxSizeMethodBody(maxSizeContext);
                 var parseMethod = typeModel.CreateParseMethodBody(parseContext);
@@ -563,9 +587,15 @@ $@"
 
         private void GenerateRecycleMethod(Type type, CodeGeneratedMethod method, RecycleCodeGenContext context)
         {
+            string nullable = string.Empty;
+            if (!type.IsValueType)
+            {
+                nullable = "?";
+            }
+
             string declaration = $@"
                 {method.GetMethodImplAttribute()}
-                private static void {this.recycleMethods[type]}({CSharpHelpers.GetCompilableTypeName(type)} {context.ValueVariableName})
+                private static void {this.recycleMethods[type]}({CSharpHelpers.GetCompilableTypeName(type)}{nullable} {context.ValueVariableName})
                 {{
                     {method.MethodBody}
                 }}

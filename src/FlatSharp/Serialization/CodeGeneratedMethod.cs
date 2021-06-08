@@ -19,7 +19,7 @@ namespace FlatSharp
     /// <summary>
     /// Defines the result of code generating a method.
     /// </summary>
-    public class CodeGeneratedMethod
+    public record CodeGeneratedMethod
     {
         public CodeGeneratedMethod(string methodBody)
         {
@@ -27,19 +27,24 @@ namespace FlatSharp
         }
 
         /// <summary>
+        /// An empty method.
+        /// </summary>
+        public static CodeGeneratedMethod Empty { get; } = new CodeGeneratedMethod(string.Empty) { IsMethodInline = true };
+
+        /// <summary>
         /// The body of the method.
         /// </summary>
-        public string MethodBody { get; set; }
+        public string MethodBody { get; init; }
 
         /// <summary>
         /// A class definition.
         /// </summary>
-        public string? ClassDefinition { get; set; }
+        public string? ClassDefinition { get; init; }
 
         /// <summary>
         /// Indicates if the method should be marked with aggressive inlining.
         /// </summary>
-        public bool IsMethodInline { get; set; }
+        public bool IsMethodInline { get; init; }
 
         public string GetMethodImplAttribute()
         {

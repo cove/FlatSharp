@@ -35,17 +35,13 @@ namespace FlatSharp.TypeModel
             this.keyMemberModel = null!;
         }
 
-        public override ITypeModel ItemTypeModel => this.valueTypeModel;
-
         public override string LengthPropertyName => nameof(IIndexedVector<string, string>.Count);
 
-        public override void OnInitialize()
+        public override Type OnInitialize()
         {
-            if (!this.ClrType.IsGenericType ||
-                this.ClrType.GetGenericTypeDefinition() != typeof(IIndexedVector<,>))
-            {
-                throw new InvalidFlatBufferDefinitionException($"Indexed vectors must be of type IIndexedVector. Type = {this.GetCompilableTypeName()}.");
-            }
+            FlatSharpInternal.Assert(
+                this.ClrType.IsGenericType && this.ClrType.GetGenericTypeDefinition() == typeof(IIndexedVector<,>),
+                $"Indexed vectors must be of type IIndexedVector. Type = {this.GetCompilableTypeName()}.");
 
             Type keyType = this.ClrType.GetGenericArguments()[0];
             Type valueType = this.ClrType.GetGenericArguments()[1];
@@ -80,6 +76,8 @@ namespace FlatSharp.TypeModel
                 throw new InvalidFlatBufferDefinitionException(
                     $"FlatSharp indexed vector keys must have the same type as the key of the value. KeyType = {this.keyTypeModel.GetCompilableTypeName()}, Value Key Type = '{this.valueTypeModel.GetCompilableTypeName()}'.");
             }
+
+            return valueType;
         }
 
         public override void AdjustTableMember(TableMemberModel source)
@@ -147,11 +145,17 @@ namespace FlatSharp.TypeModel
             };
         }
 
-        public override void TraverseObjectGraph(HashSet<Type> seenTypes)
+        public override CodeGeneratedMethod CreateRecycleMethodBody(RecycleCodeGenContext context)
         {
-            seenTypes.Add(this.ClrType);
-            this.keyTypeModel.TraverseObjectGraph(seenTypes);
-            this.valueTypeModel.TraverseObjectGraph(seenTypes);
+            // Like List<T>, lazy indexed vectors are "on-demand",
+            // so traversing to try and recycle just ends up allocating
+            // more. This is not helpful :)
+            if (!context.Options.PreallocateVectors)
+            {
+                return CodeGeneratedMethod.Empty;
+            }
+
+            return base.CreateRecycleMethodBody(context);
         }
     }
 }

@@ -25,33 +25,24 @@ namespace FlatSharp.TypeModel
     /// </summary>
     public class ListVectorTypeModel : BaseVectorTypeModel
     {
-        private ITypeModel itemTypeModel;
         private bool isReadOnly;
 
         internal ListVectorTypeModel(Type vectorType, TypeModelContainer provider) : base(vectorType, provider)
         {
-            this.itemTypeModel = null!;
         }
-
-        public override ITypeModel ItemTypeModel => this.itemTypeModel;
 
         public override string LengthPropertyName => nameof(IList<byte>.Count);
 
-        public override void OnInitialize()
+        public override Type OnInitialize()
         {
             var genericDef = this.ClrType.GetGenericTypeDefinition();
-            if (genericDef != typeof(IList<>) && genericDef != typeof(IReadOnlyList<>))
-            {
-                throw new InvalidFlatBufferDefinitionException($"Cannot build a vector from type: {this.ClrType}. Only List, ReadOnlyList, Memory, ReadOnlyMemory, and Arrays are supported.");
-            }
+
+            FlatSharpInternal.Assert(
+                genericDef == typeof(IList<>) || genericDef == typeof(IReadOnlyList<>),
+                "Cannot build a vector from type: { this.ClrType}. Only List, ReadOnlyList, Memory, ReadOnlyMemory, and Arrays are supported.");
 
             this.isReadOnly = genericDef == typeof(IReadOnlyList<>);
-            this.itemTypeModel = this.typeModelContainer.CreateTypeModel(this.ClrType.GetGenericArguments()[0]);
-
-            if (!this.itemTypeModel.IsValidVectorMember)
-            {
-                throw new InvalidFlatBufferDefinitionException($"Type '{this.itemTypeModel.GetCompilableTypeName()}' is not a valid vector member.");
-            }
+            return this.ClrType.GetGenericArguments()[0];
         }
 
         protected override string CreateLoop(
@@ -111,17 +102,17 @@ namespace FlatSharp.TypeModel
         public override CodeGeneratedMethod CreateParseMethodBody(ParserCodeGenContext context)
         {
             (string vectorClassDef, string vectorClassName) = FlatBufferVectorHelpers.CreateFlatBufferVectorSubclass(
-                this.itemTypeModel.ClrType,
+                this.ItemTypeModel.ClrType,
                 context.InputBufferTypeName,
-                context.MethodNameMap[this.itemTypeModel.ClrType]);
+                context.MethodNameMap[this.ItemTypeModel.ClrType]);
 
             string body;
 
             string createFlatBufferVector =
-            $@"new {vectorClassName}<{context.InputBufferTypeName}>(
-                    {context.InputBufferVariableName}, 
-                    {context.OffsetVariableName} + {context.InputBufferVariableName}.{nameof(InputBufferExtensions.ReadUOffset)}({context.OffsetVariableName}), 
-                    {this.PaddedMemberInlineSize})";
+                $@"new {vectorClassName}<{context.InputBufferTypeName}>(
+                        {context.InputBufferVariableName}, 
+                        {context.OffsetVariableName} + {context.InputBufferVariableName}.{nameof(InputBufferExtensions.ReadUOffset)}({context.OffsetVariableName}), 
+                        {this.PaddedMemberInlineSize})";
 
             if (context.Options.PreallocateVectors)
             {
@@ -143,6 +134,20 @@ namespace FlatSharp.TypeModel
             }
 
             return new CodeGeneratedMethod(body) { ClassDefinition = vectorClassDef };
+        }
+
+        public override CodeGeneratedMethod CreateRecycleMethodBody(RecycleCodeGenContext context)
+        {
+            // If vector preallocation is disabled, that means that attempting to be
+            // helpful and traverse the vector for recycling purposes is actually harmful
+            // as it leads to extra allocations. Note that this is only a problem for
+            // IList/IReadOnlyList as these are interfaces. Arrays can be more aggressive.
+            if (!context.Options.PreallocateVectors)
+            {
+                return CodeGeneratedMethod.Empty;
+            }
+
+            return base.CreateRecycleMethodBody(context);
         }
     }
 }

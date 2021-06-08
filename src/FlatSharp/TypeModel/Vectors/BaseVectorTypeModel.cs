@@ -31,6 +31,7 @@ namespace FlatSharp.TypeModel
 
         internal BaseVectorTypeModel(Type vectorType, TypeModelContainer provider) : base(vectorType, provider)
         {
+            this.ItemTypeModel = null!;
         }
 
         /// <summary>
@@ -77,7 +78,7 @@ namespace FlatSharp.TypeModel
         /// <summary>
         /// Gets the type model for this vector's elements.
         /// </summary>
-        public abstract ITypeModel ItemTypeModel { get; }
+        public ITypeModel ItemTypeModel { get; private set; }
 
         /// <summary>
         /// The name of the length property of this vector type.
@@ -89,10 +90,7 @@ namespace FlatSharp.TypeModel
         /// </summary>
         public override bool SerializesInline => false;
 
-        /// <summary>
-        /// We support recycle if our item does.
-        /// </summary>
-        public override bool SupportsRecycle => this.ItemTypeModel.SupportsRecycle;
+        public override IEnumerable<ITypeModel> Children => new[] { this.ItemTypeModel };
 
         /// <summary>
         /// Gets the size of each member of this vector, with padding for alignment.
@@ -146,13 +144,15 @@ namespace FlatSharp.TypeModel
             var type = this.ClrType;
             var itemTypeModel = this.ItemTypeModel;
 
-            string loopInnerInvocation = context.With(
-                valueVariableName: "current",
-                offsetVariableName: "vectorOffset").GetSerializeInvocation(itemTypeModel.ClrType);
+            var innerLoopContext = context with
+            {
+                ValueVariableName = "current",
+                OffsetVariableName = "vectorOffset"
+            };
 
             string loopBody = $@"
                 {this.GetThrowIfNullStatement("current")}
-                {loopInnerInvocation};
+                {innerLoopContext.GetSerializeInvocation(itemTypeModel.ClrType)};
                 vectorOffset += {this.PaddedMemberInlineSize};";
 
             string body = $@"
@@ -169,23 +169,29 @@ namespace FlatSharp.TypeModel
 
         public override CodeGeneratedMethod CreateRecycleMethodBody(RecycleCodeGenContext context)
         {
-            if (!this.SupportsRecycle)
+            if (!this.HasRecyclableDescendant())
             {
-                return new CodeGeneratedMethod(string.Empty) { IsMethodInline = true };
+                return CodeGeneratedMethod.Empty;
             }
 
-            var loopContext = context with
-            {
-                ValueVariableName = "current"
-            };
+            var loopContext = context with { ValueVariableName = "current" };
 
-            string loopBody = $@"{loopContext.GetRecycleInvocation(this.ItemTypeModel.ClrType)};";
-
-            string body = $@"
+            string nullCheck = $@"                
                 if ({context.ValueVariableName} is null)
                 {{
                     return;
                 }}
+            ";
+
+            if (this.IsNonNullableClrValueType())
+            {
+                nullCheck = string.Empty;
+            }
+
+            string loopBody = $@"{loopContext.GetRecycleInvocation(this.ItemTypeModel.ClrType)};";
+
+            string body = $@"
+                {nullCheck}
 
                 int count = {context.ValueVariableName}.{this.LengthPropertyName};
                 {this.CreateLoop(context.Options, context.ValueVariableName, "count", "current", loopBody)}";
@@ -225,7 +231,13 @@ namespace FlatSharp.TypeModel
         public sealed override void Initialize()
         {
             base.Initialize();
-            this.OnInitialize();
+
+            this.ItemTypeModel = this.typeModelContainer.CreateTypeModel(this.OnInitialize());
+
+            if (!this.ItemTypeModel.IsValidVectorMember)
+            {
+                throw new InvalidFlatBufferDefinitionException($"Type '{this.ItemTypeModel.GetCompilableTypeName()}' is not a valid vector member.");
+            }
 
             if (this.ItemTypeModel.PhysicalLayout.Length != 1)
             {
@@ -233,16 +245,10 @@ namespace FlatSharp.TypeModel
             }
         }
 
-        public abstract void OnInitialize();
-
-        public override void TraverseObjectGraph(HashSet<Type> seenTypes)
-        {
-            seenTypes.Add(this.ClrType);
-            if (seenTypes.Add(this.ItemTypeModel.ClrType))
-            {
-                this.ItemTypeModel.TraverseObjectGraph(seenTypes);
-            }
-        }
+        /// <summary>
+        /// Returns the underlying type of this vector.
+        /// </summary>
+        public abstract Type OnInitialize();
 
         protected string GetThrowIfNullStatement(string variableName)
         {

@@ -48,6 +48,7 @@ namespace FlatSharp.Compiler
             writer.AppendLine("using System.Linq;");
             writer.AppendLine("using System.Runtime.CompilerServices;");
             writer.AppendLine("using FlatSharp;");
+            writer.AppendLine("using FlatSharp.Internal;");
             writer.AppendLine("using FlatSharp.Attributes;");
 
             // disable obsolete warnings. Flatsharp allows marking default constructors
@@ -55,7 +56,7 @@ namespace FlatSharp.Compiler
             writer.AppendLine("#pragma warning disable 0618");
 
             // Test hook to check deeply for nullability violations.
-#if NET5_0
+#if NET5_0_OR_GREATER
             if (RoslynSerializerGenerator.EnableStrictValidation && 
                 context.Options.NullableWarnings == null)
             {

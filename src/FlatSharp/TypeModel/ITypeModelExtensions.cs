@@ -17,6 +17,7 @@
 namespace FlatSharp.TypeModel
 {
     using System;
+    using System.Collections.Generic;
     using System.Reflection;
 
     [Flags]
@@ -134,19 +135,14 @@ namespace FlatSharp.TypeModel
         {
             if (typeModel.IsNonNullableClrValueType())
             {
-                // Structs are really weird.
-                // Value types are not guaranteed to have an equality operator defined, so we can't just assume
-                // that '==' will work, so we do a little reflection, and use the operator if it is defined.
-                // otherwise, we assume that the operands are not equal no matter what.
-                var notEqualMethod = typeModel.ClrType.GetMethod("op_Inequality", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
-                if (notEqualMethod is not null || typeModel.ClrType.IsPrimitive || typeModel.ClrType.IsEnum)
+                if (typeModel.ClrType.IsPrimitive || typeModel.ClrType.IsEnum)
                 {
                     // Let's hope that != is implemented rationally!
                     return $"{variableName} != {defaultValueLiteral}";
                 }
                 else
                 {
-                    // structs without an inequality overload have to be assumed to be not equal.
+                    // We assume non-primitive structs are not equal.
                     return "true";
                 }
             }
@@ -170,6 +166,50 @@ namespace FlatSharp.TypeModel
             {
                 return "null";
             }
+        }
+
+        /// <summary>
+        /// Recursively traverses the full object graph for the given type model.
+        /// </summary>
+        public static void TraverseObjectGraph(this ITypeModel model, HashSet<Type> seenTypes)
+        {
+            if (seenTypes.Add(model.ClrType))
+            {
+                foreach (var child in model.Children)
+                {
+                    child.TraverseObjectGraph(seenTypes);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Indicates if there is a path to a recyclable element from this type model, even if
+        /// this type model does not itself support a recycle. Uses depth-first search with cycle detection.
+        /// </summary>
+        public static bool HasRecyclableDescendant(this ITypeModel typeModel)
+        {
+            static bool Recursive(ITypeModel typeModel, HashSet<Type> seenTypes)
+            {
+                if (typeModel.IsRecyclable)
+                {
+                    return true;
+                }
+
+                if (seenTypes.Add(typeModel.ClrType))
+                {
+                    foreach (var child in typeModel.Children)
+                    {
+                        if (child.IsRecyclable || Recursive(child, seenTypes))
+                        {
+                            return true;
+                        }
+                    }
+                }
+
+                return false;
+            }
+
+            return Recursive(typeModel, new());
         }
     }
 }

@@ -80,6 +80,8 @@ namespace FlatSharp.TypeModel
         /// </summary>
         public override bool SerializesInline => this.underlyingTypeModel.SerializesInline;
 
+        public override IEnumerable<ITypeModel> Children => new[] { this.underlyingTypeModel };
+
         /// <summary>
         /// Validates a default value.
         /// </summary>
@@ -90,10 +92,7 @@ namespace FlatSharp.TypeModel
             base.Initialize();
 
             Type? under = Nullable.GetUnderlyingType(this.ClrType);
-            if (under is null)
-            {
-                throw new InvalidFlatBufferDefinitionException("Nullable type model created for a type that is not Nullable<T>.");
-            }
+            FlatSharpInternal.Assert(under is not null, "Nullable type model created for a type that is not Nullable<T>.");
 
             this.underlyingType = under;
             this.underlyingTypeModel = this.typeModelContainer.CreateTypeModel(this.underlyingType);
@@ -101,7 +100,7 @@ namespace FlatSharp.TypeModel
 
         public override CodeGeneratedMethod CreateGetMaxSizeMethodBody(GetMaxSizeCodeGenContext context)
         {
-            var ctx = context.With(valueVariableName: $"{context.ValueVariableName}.Value");
+            var ctx = context with { ValueVariableName = $"{context.ValueVariableName}.Value" };
 
             string body = $@"
                 if ({context.ValueVariableName}.HasValue)
@@ -132,8 +131,7 @@ namespace FlatSharp.TypeModel
         public override CodeGeneratedMethod CreateSerializeMethodBody(SerializationCodeGenContext context)
         {
             // NULL FORGIVENESS
-            string variableName = context.ValueVariableName;
-            string body = context.With(valueVariableName: $"{variableName}!.Value").GetSerializeInvocation(this.underlyingType);
+            string body = (context with { ValueVariableName = $"{context.ValueVariableName}!.Value" }).GetSerializeInvocation(this.underlyingType);
 
             return new CodeGeneratedMethod($"{body};")
             {
@@ -158,11 +156,25 @@ namespace FlatSharp.TypeModel
             };
         }
 
-        public override void TraverseObjectGraph(HashSet<Type> seenTypes)
+        public override CodeGeneratedMethod CreateRecycleMethodBody(RecycleCodeGenContext context)
         {
-            seenTypes.Add(this.ClrType);
-            seenTypes.Add(this.underlyingType);
-            this.underlyingTypeModel.TraverseObjectGraph(seenTypes);
+            if (!this.HasRecyclableDescendant())
+            {
+                return CodeGeneratedMethod.Empty;
+            }
+
+            var valueContext = context with { ValueVariableName = context.ValueVariableName + ".Value" };
+            string body = $@"
+                if ({context.ValueVariableName}.HasValue)
+                {{
+                    {valueContext.GetRecycleInvocation(this.underlyingType)};
+                }}
+            ";
+
+            return new CodeGeneratedMethod(body)
+            {
+                IsMethodInline = true
+            };
         }
     }
 }

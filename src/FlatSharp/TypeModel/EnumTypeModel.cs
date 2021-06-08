@@ -76,14 +76,19 @@
 
         public override bool SerializeMethodRequiresContext => this.underlyingTypeModel.SerializeMethodRequiresContext;
 
+        public override IEnumerable<ITypeModel> Children => new[] { this.underlyingTypeModel };
+
         public override CodeGeneratedMethod CreateGetMaxSizeMethodBody(GetMaxSizeCodeGenContext context)
         {
             Type underlyingType = this.underlyingTypeModel.ClrType;
             string underlyingTypeName = CSharpHelpers.GetCompilableTypeName(underlyingType);
-            string body = context.With(valueVariableName: $"({underlyingTypeName}){context.ValueVariableName}")
-                                 .GetMaxSizeInvocation(underlyingType);
 
-            return new CodeGeneratedMethod($"return {body};")
+            var innerContext = context with
+            {
+                ValueVariableName = $"({underlyingTypeName}){context.ValueVariableName}"
+            };
+
+            return new CodeGeneratedMethod($"return {innerContext.GetMaxSizeInvocation(underlyingType)};")
             { 
                 IsMethodInline = true,
             };
@@ -105,10 +110,12 @@
             Type underlyingType = this.underlyingTypeModel.ClrType;
             string underlyingTypeName = CSharpHelpers.GetCompilableTypeName(underlyingType);
 
-            string body = context.With(valueVariableName: $"({underlyingTypeName}){context.ValueVariableName}")
-                                 .GetSerializeInvocation(underlyingType);
+            var innerContext = context with
+            {
+                ValueVariableName = $"({underlyingTypeName}){context.ValueVariableName}"
+            };
 
-            return new CodeGeneratedMethod($"{body};")
+            return new CodeGeneratedMethod($"{innerContext.GetSerializeInvocation(underlyingType)};")
             {
                 IsMethodInline = true,
             };
@@ -120,12 +127,6 @@
             {
                 IsMethodInline = true,
             };
-        }
-
-        public override void TraverseObjectGraph(HashSet<Type> seenTypes)
-        {
-            seenTypes.Add(this.ClrType);
-            seenTypes.Add(Enum.GetUnderlyingType(this.ClrType));
         }
 
         public override string FormatDefaultValueAsLiteral(object? defaultValue)

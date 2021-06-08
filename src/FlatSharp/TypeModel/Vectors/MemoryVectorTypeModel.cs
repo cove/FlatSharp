@@ -23,19 +23,15 @@ namespace FlatSharp.TypeModel
     /// </summary>
     public class MemoryVectorTypeModel : BaseVectorTypeModel
     {
-        private ITypeModel itemTypeModel;
         private bool isReadOnly;
 
         internal MemoryVectorTypeModel(Type vectorType, TypeModelContainer provider) : base(vectorType, provider)
         {
-            this.itemTypeModel = null!;
         }
-
-        public override ITypeModel ItemTypeModel => this.itemTypeModel;
 
         public override string LengthPropertyName => nameof(Memory<byte>.Length);
 
-        public override void OnInitialize()
+        public override Type OnInitialize()
         {
             if (this.ClrType != typeof(Memory<byte>) && this.ClrType != typeof(ReadOnlyMemory<byte>))
             {
@@ -43,12 +39,13 @@ namespace FlatSharp.TypeModel
             }
 
             this.isReadOnly = this.ClrType == typeof(ReadOnlyMemory<byte>);
-            this.itemTypeModel = new ByteTypeModel(this.typeModelContainer);
+            return typeof(byte);
         }
 
         protected override string CreateLoop(FlatBufferSerializerOptions options, string vectorVariableName, string numberOfItemsVariableName, string expectedVariableName, string body)
         {
-            throw new InvalidOperationException("Flatsharp.Internal: Not expecting to do loop get max size for memory vector");
+            FlatSharpInternal.Assert(false, "Not expecting to do loop get max size for memory vector");
+            throw new Exception();
         }
 
         public override CodeGeneratedMethod CreateParseMethodBody(ParserCodeGenContext context)

@@ -93,11 +93,6 @@ namespace FlatSharp.TypeModel
         public abstract bool SerializesInline { get; }
 
         /// <summary>
-        /// When true, indicates that an instance may be recyclable.
-        /// </summary>
-        public virtual bool SupportsRecycle => false;
-
-        /// <summary>
         /// Serialization method requires a <see cref="SerializationContext"/> argument.
         /// </summary>
         public virtual bool SerializeMethodRequiresContext => true;
@@ -111,6 +106,10 @@ namespace FlatSharp.TypeModel
         /// Most things don't have an explicit constructor.
         /// </summary>
         public virtual ConstructorInfo? PreferredSubclassConstructor => null;
+
+        public virtual bool IsRecyclable => false;
+        
+        public abstract IEnumerable<ITypeModel> Children { get; }
 
         /// <summary>
         /// Validates a default value.
@@ -138,10 +137,8 @@ namespace FlatSharp.TypeModel
 
         public virtual CodeGeneratedMethod CreateRecycleMethodBody(RecycleCodeGenContext context)
         {
-            return new CodeGeneratedMethod(string.Empty) { IsMethodInline = true };
+            return CodeGeneratedMethod.Empty;
         }
-
-        public abstract void TraverseObjectGraph(HashSet<Type> seenTypes);
 
         public virtual string FormatDefaultValueAsLiteral(object? defaultValue) => this.GetTypeDefaultExpression();
 
