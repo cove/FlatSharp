@@ -1,7 +1,7 @@
 ﻿
 namespace BenchmarkCore.Modified;
 
-struct Vector4 (fs_writeThrough, fs_pool)
+struct Vector4 (fs_writeThrough, xxfs_recyclePoolSize:-1)
 {
     x:float;
     y:float;
@@ -9,33 +9,33 @@ struct Vector4 (fs_writeThrough, fs_pool)
     w:float;
 }
 
-struct Vector3Int (fs_writeThrough, fs_pool)
+struct Vector3Int (fs_writeThrough, xxfs_recyclePoolSize:-1)
 {
     x:int32;
     y:int32;
     z:int32;
 }
 
-struct Vector3  (fs_writeThrough, fs_pool)
+struct Vector3  (fs_writeThrough, xxfs_recyclePoolSize:-1)
 {
     x:float;
     y:float;
     z:float;
 }
 
-struct Vector2Int (fs_writeThrough, fs_pool)
+struct Vector2Int (fs_writeThrough, xxfs_recyclePoolSize:-1)
 {
     x:int32;
     y:int32;
 }
 
-struct Vector2 (fs_writeThrough, fs_pool)
+struct Vector2 (fs_writeThrough, xxfs_recyclePoolSize:-1)
 {
     x:float;
     y:float;
 }
 
-struct Color (fs_writeThrough, fs_pool)
+struct Color (fs_writeThrough, xxfs_recyclePoolSize:-1)
 {
     r: ubyte;
     g: ubyte;
@@ -43,7 +43,7 @@ struct Color (fs_writeThrough, fs_pool)
     a: ubyte;
 }
 
-struct Voxel (fs_writeThrough, fs_pool)
+struct Voxel (fs_writeThrough, xxfs_recyclePoolSize:-1)
 {
     VoxelType: ubyte;
     SubType : ubyte;
@@ -51,23 +51,23 @@ struct Voxel (fs_writeThrough, fs_pool)
     Unused:ubyte;
 }
 
-struct MutableUInt32 (fs_writeThrough, fs_pool)
+struct MutableUInt32 (fs_writeThrough, xxfs_recyclePoolSize:-1)
 {
     Value : uint32;
 }
 
-struct MutableUShort (fs_writeThrough, fs_pool)
+struct MutableUShort (fs_writeThrough, xxfs_recyclePoolSize:-1)
 {
     Value : ushort;
 }
 
 table Mesh (fs_serializer:VectorCacheMutable)
 {
-    vertices:   [Vector3] (fs_vector:Array);
-    normals:    [Vector3] (fs_vector:Array);
-    uv:         [Vector2] (fs_vector:Array);
-    color:      [Color] (fs_vector:Array);
-    triangles:  [MutableUShort] (fs_vector:Array);
+    vertices:   [Vector3] (fs_vector:ArraySegment);
+    normals:    [Vector3] (fs_vector:ArraySegment);
+    uv:         [Vector2] (fs_vector:ArraySegment);
+    color:      [Color] (fs_vector:ArraySegment);
+    triangles:  [MutableUShort] (fs_vector:ArraySegment);
     filledLength: MutableUInt32;
 }
 
@@ -76,5 +76,5 @@ table VoxelRegion3D (fs_serializer:VectorCacheMutable)
     location: Vector3Int;
     iteration: MutableUInt32;
     size: ushort;
-    voxels: [Voxel];
+    voxels: [Voxel] (fs_vector:ArraySegment);
 } 
