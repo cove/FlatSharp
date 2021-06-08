@@ -48,20 +48,19 @@ namespace BenchmarkCore.Modified
 
             var region = new VoxelRegion3D();
             region.size = RegionSize;
-            region.voxels = new Voxel[regionSizeCubed];
+            region.voxels = new List<Voxel>();
             region.iteration = new MutableUInt32 { Value = 0 };
             region.location = new Vector3Int();
             rnd = new Random(0);
             for (int i = 0; i < regionSizeCubed; i++)
             {
-                var segment = region.voxels.Value;
-                segment[i] = new Voxel
+                region.voxels.Add(new Voxel
                 {
                     VoxelType = (byte)Math.Clamp(rnd.Next(-255, 255), 0, 255),
                     SubType = (byte)rnd.Next(255),
                     Hp = (byte)rnd.Next(255),
                     Unused = (byte)rnd.Next(255)
-                };
+                });
             }
 
             SaveToDisk(region);
@@ -69,19 +68,22 @@ namespace BenchmarkCore.Modified
             // Update fillSize to accomodate max of (fillSize * 3). Some items may be null.
             Mesh mesh = new Mesh
             {
-                color = new Color[fillSize * 3],
-                normals = new Vector3[fillSize * 3],
-                triangles = new MutableUShort[fillSize * 3],
-                uv = new Vector2[fillSize * 3],
-                vertices = new Vector3[fillSize * 3],
+                color = new List<Color>(),
+                normals = new List<Vector3>(),
+                triangles = new List<MutableUShort>(),
+                uv = new List<Vector2>(),
+                vertices = new List<Vector3>(),
                 filledLength = new MutableUInt32 { Value = 0 }
             };
 
-            Array.Fill(mesh.color.Value.Array, new());
-            Array.Fill(mesh.normals.Value.Array, new());
-            Array.Fill(mesh.triangles.Value.Array, new());
-            Array.Fill(mesh.uv.Value.Array, new());
-            Array.Fill(mesh.vertices.Value.Array, new());
+            for (int i = 0; i < fillSize * 3; ++i)
+            {
+                mesh.color.Add(new());
+                mesh.normals.Add(new());
+                mesh.triangles.Add(new());
+                mesh.uv.Add(new());
+                mesh.vertices.Add(new());
+            }
 
             UpdateMeshInPlace(rnd, region, mesh);
             SaveToDisk(mesh);
@@ -91,12 +93,12 @@ namespace BenchmarkCore.Modified
         {
             int filled = 0;
 
-            var vertices = mesh.vertices.Value;
-            var normals = mesh.normals.Value;
-            var colors = mesh.color.Value;
-            var uvs = mesh.uv.Value;
-            var triangles = mesh.triangles.Value;
-            var voxels = voxelRegion3D.voxels.Value;
+            var vertices = mesh.vertices;
+            var normals = mesh.normals;
+            var colors = mesh.color;
+            var uvs = mesh.uv;
+            var triangles = mesh.triangles;
+            var voxels = voxelRegion3D.voxels;
 
             Voxel[] adjacentVoxels = new Voxel[8];
 
@@ -242,7 +244,7 @@ namespace BenchmarkCore.Modified
             var deserializedRegion = this.voxelSerializer.Parse(regionFromStorage);
 
             Mesh mesh = this.meshSerializer.Parse<Mesh>(FakeDiskStoredMesh);
-            var voxels = deserializedRegion.voxels.Value;
+            var voxels = deserializedRegion.voxels;
 
             // simulate region data change
             voxels[rnd.Next(0, voxels.Count - 1)].VoxelType = (byte)rnd.Next(1);
@@ -263,8 +265,8 @@ namespace BenchmarkCore.Modified
                 //FakeDiskStoredMesh.CopyTo(networkBuffer, 0);
             }
 
-            this.meshSerializer.Recycle(ref mesh);
-            this.voxelSerializer.Recycle(ref deserializedRegion);
+            //this.meshSerializer.Recycle(ref mesh);
+            //this.voxelSerializer.Recycle(ref deserializedRegion);
         }
 
         private void SaveToDisk(VoxelRegion3D deserializedRegion)

@@ -61,20 +61,20 @@ struct MutableUShort (fs_writeThrough, xxfs_recyclePoolSize:-1)
     Value : ushort;
 }
 
-table Mesh (fs_serializer:VectorCacheMutable)
+table Mesh (fs_serializer:LazyWriteThrough)
 {
-    vertices:   [Vector3] (fs_vector:ArraySegment);
-    normals:    [Vector3] (fs_vector:ArraySegment);
-    uv:         [Vector2] (fs_vector:ArraySegment);
-    color:      [Color] (fs_vector:ArraySegment);
-    triangles:  [MutableUShort] (fs_vector:ArraySegment);
+    vertices:   [Vector3] (fs_vector:IList);
+    normals:    [Vector3] (fs_vector:IList);
+    uv:         [Vector2] (fs_vector:IList);
+    color:      [Color] (fs_vector:IList);
+    triangles:  [MutableUShort] (fs_vector:IList);
     filledLength: MutableUInt32;
 }
 
-table VoxelRegion3D (fs_serializer:VectorCacheMutable)
+table VoxelRegion3D (fs_serializer:LazyWriteThrough)
 {
     location: Vector3Int;
     iteration: MutableUInt32;
     size: ushort;
-    voxels: [Voxel] (fs_vector:ArraySegment);
+    voxels: [Voxel] (fs_vector:IList);
 } 
