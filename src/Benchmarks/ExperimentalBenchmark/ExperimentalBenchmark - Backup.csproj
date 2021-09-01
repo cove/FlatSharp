@@ -11,13 +11,13 @@
     <DebugSymbols>true</DebugSymbols>
     <Nullable>enable</Nullable>
     <ValidateExecutableReferencesMatchSelfContained>false</ValidateExecutableReferencesMatchSelfContained>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" Version="0.12.1" />
     <PackageReference Include="BenchmarkDotNet.Diagnostics.Windows" Version="0.12.1" />
     <PackageReference Include="Grpc" Version="2.27.0" />
+    <PackageReference Include="Microsoft.Extensions.ObjectPool" Version="5.0.6" />
     <PackageReference Include="System.IO.FileSystem.Primitives" Version="4.3.0" />
     <PackageReference Include="System.Runtime.InteropServices" Version="4.3.0" />
   </ItemGroup>
@@ -28,22 +28,10 @@
     <ProjectReference Include="..\..\FlatSharp.Unsafe\FlatSharp.Unsafe.csproj" />
     <ProjectReference Include="..\..\FlatSharp\FlatSharp.csproj" />
   </ItemGroup>
-  <ItemGroup>
-    <Compile Remove="Benchmark.fbs.generated.cs" />
-    <Compile Include="Benchmark.fbs.generated.cs" />
-    <Compile Remove="Mesh3dBenchmark.fbs.generated.cs" />
-    <Compile Include="Mesh3dBenchmark.fbs.generated.cs" />
-    <Compile Remove="Mesh3dBenchmark_Modified.fbs.generated.cs" />
-    <Compile Include="Mesh3dBenchmark_Modified.fbs.generated.cs" />
-    <Compile Remove="Mesh3dBenchmark_ByValue.fbs.generated.cs" />
-    <Compile Include="Mesh3dBenchmark_ByValue.fbs.generated.cs" />
-  </ItemGroup>
 
-  <Target Name="FBS" BeforeTargets="BeforeBuild">
+  <Target Name="FBS" BeforeTargets="BeforeBuild" Condition=" '$(AppVeyorBuild)' != 'true' ">
     <Exec Command="..\..\FlatSharp.Compiler\bin\$(Configuration)\net5.0\FlatSharp.Compiler.exe -i Benchmark.fbs -o . --nullable-warnings true" />
     <Exec Command="..\..\FlatSharp.Compiler\bin\$(Configuration)\net5.0\FlatSharp.Compiler.exe -i Mesh3dBenchmark.fbs -o . --nullable-warnings true" />
     <Exec Command="..\..\FlatSharp.Compiler\bin\$(Configuration)\net5.0\FlatSharp.Compiler.exe -i Mesh3dBenchmark_Modified.fbs -o . --nullable-warnings true" />
-    <Exec Command="..\..\FlatSharp.Compiler\bin\$(Configuration)\net5.0\FlatSharp.Compiler.exe -i Mesh3dBenchmark_ByValue.fbs -o . --nullable-warnings true" />
-
   </Target>
 </Project>

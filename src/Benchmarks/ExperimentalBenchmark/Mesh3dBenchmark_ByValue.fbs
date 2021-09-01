@@ -1,0 +1,69 @@
+﻿
+namespace BenchmarkCore.ByValue;
+
+struct Vector4 (fs_valueStruct)
+{
+    x:float;
+    y:float;
+    z:float;
+    w:float;
+}
+
+struct Vector3Int (fs_valueStruct)
+{
+    x:int32;
+    y:int32;
+    z:int32;
+}
+
+struct Vector3 (fs_valueStruct)
+{
+    x:float;
+    y:float;
+    z:float;
+}
+
+struct Vector2Int (fs_valueStruct)
+{
+    x:int32;
+    y:int32;
+}
+
+struct Vector2 (fs_valueStruct)
+{
+    x:float;
+    y:float;
+}
+
+struct Color (fs_valueStruct)
+{
+    r: ubyte;
+    g: ubyte;
+    b: ubyte;
+    a: ubyte;
+}
+
+struct Voxel (fs_valueStruct)
+{
+    VoxelType: ubyte;
+    SubType : ubyte;
+    Hp:ubyte;
+    Unused:ubyte;
+}
+
+table Mesh
+{
+    vertices:   [Vector3];
+    normals:    [Vector3];
+    uv:         [Vector2];
+    color:      [Color];
+    triangles:  [ushort];
+}
+
+table VoxelRegion3D 
+{
+    location: Vector3Int;
+    iteration: uint32;
+    size: ushort;
+    voxels: [Voxel];
+} 

@@ -19,144 +19,65 @@ using BenchmarkDotNet.Running;
 using FlatSharp;
 using FlatSharp.Unsafe;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Runtime.InteropServices;
+using System.Diagnostics.CodeAnalysis;
+using System.Threading;
 
 namespace BenchmarkCore
 {
     [MemoryDiagnoser]
     [ThreadingDiagnoser]
     [MediumRunJob(BenchmarkDotNet.Jobs.RuntimeMoniker.NetCoreApp50, BenchmarkDotNet.Environments.Jit.RyuJit, BenchmarkDotNet.Environments.Platform.AnyCpu)]
-    public class Benchmark
+    public class StructVectorClone
     {
         private readonly byte[] data = new byte[10 * 1024 * 1024];
+        private SomeTable? table;
 
         private ArrayInputBuffer inputBuffer;
-        private ValueTable valueTable;
-        private ValueTable_Unsafe unsafeValueTable;
-        private Table table;
+        //private UnsafeSpanWriter2 spanWriter;
 
         [GlobalSetup]
         public void Setup()
         {
-            ValueTable t = new ValueTable();
-            t.Points = new List<Vec3Value>();
+            this.inputBuffer = new ArrayInputBuffer(this.data);
+            //this.spanWriter = UnsafeSpanWriter2.Instance;
+
+            this.table = new SomeTable
+            {
+                Points = new Vec3[20000]
+            };
 
             for (int i = 0; i < 20_000; ++i)
             {
-                var value = new Vec3Value();
-
-                for (int ii = 0; ii < value.X_Length; ++ii)
-                {
-                    value.X(ii) = (byte)ii;
-                }
-
-                t.Points.Add(value);
+                this.table.Points[i] = (new Vec3 { X = 1, Y = 2, Z = 3 });
             }
 
-            ValueTable.Serializer.Write(data, t);
-            inputBuffer = new ArrayInputBuffer(data);
-
-            valueTable = new ValueTable(ValueTable.Serializer.Parse(data));
-            unsafeValueTable = new ValueTable_Unsafe(ValueTable_Unsafe.Serializer.Parse(data));
-            table = new Table(Table.Serializer.Parse(data));
+            this.Serialize();
         }
 
         [Benchmark]
-        public int ParseAndTraverse_Value()
+        public void Serialize()
         {
-            var t = ValueTable.Serializer.Parse(this.inputBuffer);
+            int size = SomeTable.Serializer.Write(SpanWriter.Instance, this.data, this.table!);
+        }
 
+        [Benchmark]
+        public int ParseAndTraverse()
+        {
+            var t = SomeTable.Serializer.Parse(this.inputBuffer);
             int sum = 0;
 
             var points = t.Points;
-            if (points is null)
-            {
-                return 0;
-            }
-
             int count = points.Count;
             for (int i = 0; i < count; ++i)
             {
-                var point = points[i];
-                for (int ii = 0; ii < point.X_Length; ++ii)
-                {
-                    sum += (int)point.X(ii);
-                }
+                var item = points[i];
+                sum += (int)(item.X + item.Y + item.Z);
             }
 
             return sum;
-        }
-
-        [Benchmark]
-        public int Serialize_Value()
-        {
-            return ValueTable.Serializer.Write(this.data, this.valueTable);
-        }
-
-        [Benchmark]
-        public int ParseAndTraverse_Value_Unsafe()
-        {
-            var t = ValueTable_Unsafe.Serializer.Parse(this.inputBuffer);
-
-            int sum = 0;
-
-            var points = t.Points;
-            if (points is null)
-            {
-                return 0;
-            }
-
-            int count = points.Count;
-            for (int i = 0; i < count; ++i)
-            {
-                var point = points[i];
-                for (int ii = 0; ii < point.X_Length; ++ii)
-                {
-                    sum += (int)point.X(ii);
-                }
-            }
-
-            return sum;
-        }
-
-        [Benchmark]
-        public int Serialize_Value_Unsafe()
-        {
-            return ValueTable_Unsafe.Serializer.Write(this.data, this.unsafeValueTable);
-        }
-
-        [Benchmark]
-        public int ParseAndTraverse_Ref()
-        {
-            var t = Table.Serializer.Parse(this.inputBuffer);
-
-            int sum = 0;
-
-            var points = t.Points;
-            if (points is null)
-            {
-                return 0;
-            }
-
-            int count = points.Count;
-            for (int i = 0; i < count; ++i)
-            {
-                var vec = points[i].X;
-                for (int ii = 0; ii < vec.Count; ++ii)
-                {
-                    sum += (int)vec[ii];
-                }
-            }
-
-            return sum;
-        }
-
-        [Benchmark]
-        public int Serialize_Ref()
-        {
-            return Table.Serializer.Write(this.data, this.table);
         }
     }
 
@@ -164,10 +85,36 @@ namespace BenchmarkCore
     {
         public static void Main(string[] args)
         {
-            //Vec3Value v = default;
-            //v.X(3) = 5;
+            //Modified.MeshServerModifiedUseCases m = new Modified.MeshServerModifiedUseCases();
+            //m.Setup();
 
-            BenchmarkRunner.Run<Benchmark>();
+            //BenchmarkRunner.Run<MeshServerUseCases>();
+            //BenchmarkRunner.Run<Modified.MeshServerModifiedUseCases>();
+            BenchmarkRunner.Run<ByValue.MeshServerUseCases_ByValue>();
+
+            //BenchmarkRunner.Run<StructVectorClone>();
+            //FlatSharpGlobalSettings.CollectPooledObjectStackTraces = true;
+
+            //byte[] buffer = new byte[1024];
+            //SomeTable.Serializer.Write(buffer, table);
+
+            //var parsed = SomeTable.Serializer.Parse(buffer);
+            //var parsed2 = parsed;
+
+            //for (int i = 0; i < parsed2.Points.Count; ++i)
+            //{
+            //    Console.WriteLine(parsed2.Points[i].X);
+            //}
+
+            //SomeTable.Serializer.Recycle(ref parsed);
+
+            //parsed = SomeTable.Serializer.Parse(buffer);
+            //parsed2 = parsed;
+
+            //for (int i = 0; i < parsed2.Points.Count; ++i)
+            //{
+            //    Console.WriteLine(parsed2.Points[i].X);
+            //}
         }
     }
 }
