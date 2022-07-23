@@ -14,9 +14,18 @@
  * limitations under the License.
  */
 
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using Grpc.Core;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 
 namespace Samples.GrpcExample;
 
@@ -46,10 +55,12 @@ public class GrpcExample
             EchoService.Serializer<MultiMessage>.Value = EchoService.Serializer<MultiMessage>.Value.WithSettings(settings);
         }
 
-        Server server = new Server();
-        server.Ports.Add("127.0.0.1", 50001, ServerCredentials.Insecure);
-        server.Services.Add(EchoService.BindService(new ServerImpl()));
-        server.Start();
+        // Server server = new Server();
+        // server.Ports.Add("127.0.0.1", 50001, ServerCredentials.Insecure);
+        // server.Services.Add(EchoService.BindService(new ServerImpl()));
+        // server.Start();
+
+        CreateHostBuilder(new[] { "" }).Build().RunAsync();
 
         Thread.Sleep(1000);
 
@@ -64,7 +75,7 @@ public class GrpcExample
 
         Thread.Sleep(1000);
 
-        server.ShutdownAsync().GetAwaiter().GetResult();
+        // server.ShutdownAsync().GetAwaiter().GetResult();
     }
 
     /// <summary>
@@ -239,6 +250,43 @@ public class GrpcExample
             {
                 await responseStream.WriteAsync(requestStream.Current);
             }
+        }
+    }
+
+    public static IHostBuilder CreateHostBuilder(string[] args) =>
+        Host.CreateDefaultBuilder(args)
+            .ConfigureLogging(l =>
+            {
+                l.ClearProviders();
+                // l.AddConsole(); 
+            })
+            .ConfigureWebHostDefaults(webBuilder =>
+            {
+                webBuilder.ConfigureKestrel(options => { options.ListenAnyIP(50001, listenOptions => { listenOptions.Protocols = HttpProtocols.Http2; }); });
+                webBuilder.UseStartup<Startup>();
+            });
+
+    public class Startup
+    {
+        private static IConfiguration Configuration { get; set; }
+        public Startup(IConfiguration configuration) => Configuration = configuration;
+
+        public void ConfigureServices(IServiceCollection services)
+        {
+            services.AddSingleton<ServerImpl>();
+            services.AddControllers();
+            services.AddGrpc();
+        }
+
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
+        {
+            app.UseHttpLogging();
+            app.UseRouting();
+            app.UseEndpoints(endpoints =>
+            {
+                endpoints.MapGrpcService<ServerImpl>();
+                endpoints.MapGet("/", async context => { await context.Response.WriteAsync("Communication with gRPC endpoints must be made through a gRPC client. To learn how to create a client, visit: https://go.microsoft.com/fwlink/?linkid=2086909"); });
+            });
         }
     }
 }

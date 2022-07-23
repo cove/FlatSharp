@@ -17,7 +17,7 @@
 attribute "fs_serializer";
 attribute "fs_rpcInterface";
 attribute "fs_sharedString";
-
+ 
 namespace Samples.GrpcExample;
 
 table SingleMessage (fs_serializer:"Lazy")
